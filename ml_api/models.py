@@ -65,3 +65,18 @@ class Feedback(models.Model):
 
     def __str__(self):
         return f"{self.detection_id}: {self.original_label} → {self.corrected_label}"
+# In your models.py add:
+
+class CachedAudio(models.Model):
+    cache_key = models.CharField(max_length=64, unique=True, db_index=True)
+    audio_data = models.BinaryField()
+    language = models.CharField(max_length=10)
+    voice = models.CharField(max_length=50)
+    tts_text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['cache_key']),
+            models.Index(fields=['created_at']),
+        ]

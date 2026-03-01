@@ -1,9 +1,12 @@
 """
 Django settings for Fraudlock backend project.
 """
+from dotenv import load_dotenv
+import os
+load_dotenv()
 from pathlib import Path
 from datetime import timedelta
-
+print("YARNGPT KEY LOADED:", bool(os.environ.get('YARNGPT_API_KEY')))
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'django-insecure-9a-2%dfzxhww#*nxcy-++471954b1o)r@@03^nxv(_*!=ls+&h'
