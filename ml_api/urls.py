@@ -8,7 +8,8 @@ urlpatterns = [
     # Home & health
     path('', views.api_home, name='api_home'),
     path('health/', views.health_check, name='health_check'),
-
+    path('numbers/lookup/',    views.lookup_number,    name='lookup_number'),
+    path('numbers/directory/', views.number_directory, name='number_directory'),
     # Core detection
     path('check-message/', views.check_message, name='check_message'),
     path('predict/', views.predict_sms, name='predict_sms'),  # Legacy

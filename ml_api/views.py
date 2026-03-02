@@ -44,18 +44,53 @@ except Exception:
 # ── YarnGPT config ────────────────────────────────────────────────────────────
 
 YARNGPT_API_KEY = os.environ.get('YARNGPT_API_KEY', '')
+TERMII_API_KEY = os.environ.get('TERMII_API_KEY', '')
+TERMII_BASE    = 'https://v3.api.termii.com'
+
+def normalise_nigerian_number(number: str) -> str:
+    number = re.sub(r'\s+|-', '', number.strip())
+    if number.startswith('+234'):
+        return number[1:]
+    if number.startswith('234'):
+        return number
+    if number.startswith('0') and len(number) == 11:
+        return '234' + number[1:]
+    return number
+
+def get_termii_carrier(number: str) -> dict:
+    if not TERMII_API_KEY:
+        return {'network': None, 'status': None, 'dnd': None}
+    try:
+        resp = http_requests.get(
+            f'{TERMII_BASE}/api/check/dnd',
+            params={
+                'api_key':      TERMII_API_KEY,
+                'phone_number': normalise_nigerian_number(number),
+                'type':         '2',
+            },
+            timeout=8,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            return {
+                'network':      data.get('network', None),
+                'network_code': data.get('network_code', None),
+                'status':       data.get('status', None),
+                'dnd':          'dnd' in str(data.get('status', '')).lower(),
+            }
+        return {'network': None, 'status': None, 'dnd': None}
+    except Exception as e:
+        return {'network': None, 'status': None, 'dnd': None}
 YARNGPT_URL     = 'https://yarngpt.ai/api/v1/tts'
 
-# Map language codes → best YarnGPT voice for that language/gender
 LANG_VOICE_MAP = {
-    'en':  'Idera',     # Melodic, gentle — general Nigerian English
-    'pid': 'Tayo',      # Upbeat, energetic — fits Pidgin energy
-    'yo':  'Wura',      # Young, sweet — Yoruba female voice
-    'ha':  'Umar',      # Calm, smooth — Hausa male voice
-    'ig':  'Chinenye',  # Engaging, warm — Igbo female voice
+    'en':  'Idera',
+    'pid': 'Tayo',
+    'yo':  'Wura',
+    'ha':  'Umar',
+    'ig':  'Chinenye',
 }
 
-# TTS text templates per language
 def build_tts_text(label: str, confidence: int, risk: str, recommendation: str, language: str) -> str:
     templates = {
         'en': {
@@ -209,9 +244,6 @@ def analyze_indicators(message: str):
     if re.search(r'https?://\S+|www\.\S+', message):
         indicators.append('contains URL')
         risk_score += 2
-    if re.search(r'\b0[789][01]\d{8}\b|\+234\d{10}', message):
-        indicators.append('contains Nigerian phone number')
-        risk_score += 1
     return indicators, risk_score
 
 
@@ -224,24 +256,64 @@ def _classify(spam_prob: float):
     return 'safe', 'Low'
 
 
-def _verdict(classification: str):
-    if classification == 'phishing':
-        return (
-            "Phishing / Spam SMS",
-            "Danger! This is a phishing attempt",
-            "Do not click any links or respond. Delete this message immediately.",
-        )
-    elif classification == 'suspicious':
-        return (
-            "Suspicious SMS",
-            "Warning! This content is suspicious",
-            "Be cautious. Verify the sender before taking any action.",
-        )
-    return (
-        "Legitimate SMS",
-        "This content appears safe",
-        "This message seems legitimate, but always stay vigilant.",
-    )
+# ── UPDATED: multilingual _verdict ───────────────────────────────────────────
+
+def _verdict(classification: str, language: str = 'en'):
+    verdicts = {
+        'phishing': {
+            'en':  ("Phishing / Spam SMS",
+                    "Danger! This is a phishing attempt",
+                    "Do not click any links or respond. Delete this message immediately."),
+            'pid': ("Phishing / Spam SMS",
+                    "Danger! This na phishing attempt",
+                    "No click any link or reply. Delete this message now now."),
+            'yo':  ("Phishing / Spam SMS",
+                    "Ewu! Eyi jẹ igbiyanju jibiti",
+                    "Má tẹ ọna asopọ eyikeyi. Pa ifiranṣẹ yii rẹ lẹsẹkẹsẹ."),
+            'ha':  ("Phishing / Spam SMS",
+                    "Haɗari! Wannan yunƙurin zamba ne",
+                    "Kada ka danna wani hanyar haɗi. Goge wannan saƙo yanzu."),
+            'ig':  ("Phishing / Spam SMS",
+                    "Ihe egwu! Nke a bụ nnọchitere aghụghọ",
+                    "Ekwela iji njikọ ọ bụla. Hichapụ ozi a ozugbo."),
+        },
+        'suspicious': {
+            'en':  ("Suspicious SMS",
+                    "Warning! This content is suspicious",
+                    "Be cautious. Verify the sender before taking any action."),
+            'pid': ("Suspicious SMS",
+                    "Warning! This content get issue",
+                    "Take am easy. Verify who send am before you do anything."),
+            'yo':  ("Suspicious SMS",
+                    "Ìkìlọ̀! Akoonu yii jẹ ifura",
+                    "Ṣọra. Ṣayẹwo ẹni ti o fi ranṣẹ ṣaaju ki o to ṣe iṣe eyikeyi."),
+            'ha':  ("Suspicious SMS",
+                    "Gargadi! Wannan abun ciki yana da shakka",
+                    "Yi hankali. Tabbatar da mai aika kafin daukar wani mataki."),
+            'ig':  ("Suspicious SMS",
+                    "Ọ dị njọ! Ọdịnaya a na-atọ atụ",
+                    "Dị careful. Nọchite onye zitere tupu ị mee ihe ọ bụla."),
+        },
+        'safe': {
+            'en':  ("Legitimate SMS",
+                    "This content appears safe",
+                    "This message seems legitimate, but always stay vigilant."),
+            'pid': ("Legitimate SMS",
+                    "This content dey clean",
+                    "This message look genuine, but always dey alert."),
+            'yo':  ("Legitimate SMS",
+                    "Akoonu yii dabi ẹnipe o jẹ ailewu",
+                    "Ifiranṣẹ yii dabi ẹnipe o jẹ gidi, ṣugbọn jẹ ki o mọ nigbagbogbo."),
+            'ha':  ("Legitimate SMS",
+                    "Wannan abun ciki yana da aminci",
+                    "Wannan sakon yana da inganci, amma koyaushe ka kasance a faɗake."),
+            'ig':  ("Legitimate SMS",
+                    "Ozi a yiri ka ọ dị mọọ",
+                    "Ozi a yiri ka ọ dị ezigbo, mana nọgide na-ele anya mgbe niile."),
+        },
+    }
+    lang_verdicts = verdicts.get(classification, verdicts['safe'])
+    return lang_verdicts.get(language, lang_verdicts['en'])
 
 
 def _rule_based_probs(risk_score: int):
@@ -290,8 +362,10 @@ def check_message(request):
             mode = 'rule_based'
             spam_prob, legit_prob = _rule_based_probs(risk_score)
 
-        classification, risk_level          = _classify(spam_prob)
-        pred_text, msg_text, recommendation = _verdict(classification)
+        classification, risk_level = _classify(spam_prob)
+
+        # UPDATED: pass language so recommendation is in the correct language
+        pred_text, msg_text, recommendation = _verdict(classification, language)
 
         label      = 'legitimate' if classification == 'safe' else 'spam'
         confidence = round(max(spam_prob, legit_prob), 2)
@@ -418,12 +492,15 @@ def submit_feedback(request):
 @require_http_methods(["POST"])
 def generate_audio(request):
     try:
-        data           = json.loads(request.body)
-        label          = data.get('label', 'spam')
-        confidence     = data.get('confidence', 0)
-        risk_level     = data.get('risk_level', 'High')
-        language       = data.get('language', 'en')
-        recommendation = data.get('recommendation', '')
+        data       = json.loads(request.body)
+        label      = data.get('label', 'spam')
+        confidence = data.get('confidence', 0)
+        risk_level = data.get('risk_level', 'High')
+        language   = data.get('language', 'en')
+
+        # Build recommendation fresh in correct language — never trust frontend value
+        label_for_verdict = 'phishing' if label == 'spam' else 'safe'
+        _, _, recommendation = _verdict(label_for_verdict, language)
 
         if not YARNGPT_API_KEY:
             return JsonResponse(
@@ -431,12 +508,10 @@ def generate_audio(request):
                 status=503
             )
 
-        # Build the spoken text in the correct language
         c        = round(float(confidence))
         tts_text = build_tts_text(label, c, risk_level, recommendation, language)
         voice    = LANG_VOICE_MAP.get(language, 'Idera')
 
-        # Call YarnGPT
         yarngpt_response = http_requests.post(
             YARNGPT_URL,
             headers={
@@ -459,7 +534,6 @@ def generate_audio(request):
                 status=502
             )
 
-        # Stream audio bytes back to frontend
         audio_bytes = b''.join(yarngpt_response.iter_content(chunk_size=8192))
         return HttpResponse(
             audio_bytes,
@@ -579,7 +653,7 @@ def health_check(request):
 @require_http_methods(["GET"])
 def api_home(request):
     return JsonResponse({
-        'message':      'PhishGuard NG API',
+        'message':      ' FRAUDLOCK NG API',
         'version':      '2.1',
         'model_loaded': MODEL_LOADED,
         'spam_threshold': SPAM_THRESHOLD,
@@ -594,6 +668,96 @@ def api_home(request):
 
 
 @csrf_exempt
-@require_http_methods(["POST"])
+@require_http_methods(["GET"])
+def lookup_number(request):
+    try:
+        number_clean = re.sub(r'\s+', '', request.GET.get('number', '').strip())
+        if not number_clean:
+            return JsonResponse({'error': 'No number provided'}, status=400)
+
+        reported = None
+        for fmt in [number_clean, normalise_nigerian_number(number_clean),
+                    '0' + normalise_nigerian_number(number_clean)[3:]]:
+            try:
+                reported = ReportedNumber.objects.get(number=fmt)
+                break
+            except ReportedNumber.DoesNotExist:
+                continue
+
+        carrier = get_termii_carrier(number_clean)
+
+        if reported:
+            return JsonResponse({
+                'found':           True,
+                'number':          reported.number,
+                'report_count':    reported.report_count,
+                'auto_flagged':    reported.auto_flagged,
+                'predicted_label': reported.predicted_label,
+                'first_reported':  reported.first_reported.isoformat(),
+                'last_reported':   reported.last_reported.isoformat(),
+                'flagged_at':      reported.flagged_at.isoformat() if reported.flagged_at else None,
+                'threshold':       ReportedNumber.AUTO_FLAG_THRESHOLD,
+                'network':         carrier.get('network'),
+                'network_code':    carrier.get('network_code'),
+                'dnd':             carrier.get('dnd'),
+                'carrier_status':  carrier.get('status'),
+            })
+        else:
+            return JsonResponse({
+                'found':        False,
+                'number':       number_clean,
+                'report_count': 0,
+                'auto_flagged': False,
+                'network':      carrier.get('network'),
+                'network_code': carrier.get('network_code'),
+                'dnd':          carrier.get('dnd'),
+                'threshold':    ReportedNumber.AUTO_FLAG_THRESHOLD,
+            })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def number_directory(request):
+    try:
+        qs = ReportedNumber.objects.all().order_by('-report_count')[:200]
+        return JsonResponse([{
+            'number':         r.number,
+            'report_count':   r.report_count,
+            'auto_flagged':   r.auto_flagged,
+            'flagged_at':     r.flagged_at.isoformat() if r.flagged_at else None,
+            'first_reported': r.first_reported.isoformat(),
+            'last_reported':  r.last_reported.isoformat(),
+        } for r in qs], safe=False)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+def get_termii_carrier(number: str) -> dict:
+    if not TERMII_API_KEY:
+        return {'network': None, 'status': None, 'dnd': None}
+    try:
+        resp = http_requests.get(
+            f'{TERMII_BASE}/api/check/dnd',
+            params={
+                'api_key':      TERMII_API_KEY,
+                'phone_number': normalise_nigerian_number(number),
+                'type':         '2',
+            },
+            timeout=8,
+        )
+        if resp.status_code in (200, 404):
+              data = resp.json()
+              network = data.get('network', None)
+        if network:
+         return {
+            'network':      network,
+            'network_code': data.get('network_code', None),
+            'status':       data.get('status', None),
+            'dnd':          False,  # 404 means NOT on DND
+        }
+        return {'network': None, 'status': None, 'dnd': None}
+    except Exception as e:
+        print("TERMII ERROR:", e)
+        return {'network': None, 'status': None, 'dnd': None}
 def predict_sms(request):
     return check_message(request)
