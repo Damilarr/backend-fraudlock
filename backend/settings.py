@@ -1,23 +1,28 @@
 """
-Django settings for Fraudlock backend project.
+Django settings for Fraudlock backend.
 """
-from dotenv import load_dotenv
 import os
-load_dotenv()
 from pathlib import Path
 from datetime import timedelta
 
-print("YARNGPT KEY LOADED:", bool(os.environ.get('YARNGPT_API_KEY')))
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'django-insecure-9a-2%dfzxhww#*nxcy-++471954b1o)r@@03^nxv(_*!=ls+&h'
+SECRET_KEY = os.environ.get(
+    'SECRET_KEY',
+    'django-insecure-9a-2%dfzxhww#*nxcy-++471954b1o)r@@03^nxv(_*!=ls+&h'
+)
 
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '*']
+ALLOWED_HOSTS = ['*']
 
-
-# ── Apps ─────────────────────────────────────────────────────────────────────
+# ── Apps ──────────────────────────────────────────────────────────────────────
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -26,21 +31,17 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
-    # Third-party
     'corsheaders',
     'rest_framework',
-
-    # Local
     'ml_api',
 ]
-
 
 # ── Middleware ────────────────────────────────────────────────────────────────
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',      # ← serves static files
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -69,8 +70,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'backend.wsgi.application'
 
-
-# ── Database ─────────────────────────────────────────────────────────────────
+# ── Database ──────────────────────────────────────────────────────────────────
 
 DATABASES = {
     'default': {
@@ -79,8 +79,7 @@ DATABASES = {
     }
 }
 
-
-# ── Auth ─────────────────────────────────────────────────────────────────────
+# ── Auth ──────────────────────────────────────────────────────────────────────
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
@@ -89,8 +88,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
-
-# ── REST Framework + JWT ─────────────────────────────────────────────────────
+# ── REST Framework + JWT ──────────────────────────────────────────────────────
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -99,26 +97,32 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=2),
+    'ACCESS_TOKEN_LIFETIME':  timedelta(hours=2),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
 }
 
-
-# ── CORS ─────────────────────────────────────────────────────────────────────
+# ── CORS ──────────────────────────────────────────────────────────────────────
 
 CORS_ALLOW_ALL_ORIGINS = True
 
-
-# ── i18n ─────────────────────────────────────────────────────────────────────
+# ── i18n ──────────────────────────────────────────────────────────────────────
 
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
-USE_I18N = True
-USE_TZ = True
+TIME_ZONE     = 'UTC'
+USE_I18N      = True
+USE_TZ        = True
 
+# ── Static files ──────────────────────────────────────────────────────────────
 
-# ── Static ───────────────────────────────────────────────────────────────────
-
-STATIC_URL = 'static/'
+STATIC_URL  = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'          # ← required for Render
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ── External API keys ─────────────────────────────────────────────────────────
+
+YARNGPT_API_KEY = os.environ.get('YARNGPT_API_KEY', '')
+TERMII_API_KEY  = os.environ.get('TERMII_API_KEY',  '')
+
+print("YARNGPT KEY LOADED:", bool(YARNGPT_API_KEY))
