@@ -6,6 +6,7 @@ import os
 load_dotenv()
 from pathlib import Path
 from datetime import timedelta
+
 print("YARNGPT KEY LOADED:", bool(os.environ.get('YARNGPT_API_KEY')))
 BASE_DIR = Path(__file__).resolve().parent.parent
 
