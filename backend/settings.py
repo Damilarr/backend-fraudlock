@@ -122,7 +122,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ── External API keys ─────────────────────────────────────────────────────────
 
-YARNGPT_API_KEY = os.environ.get('YARNGPT_API_KEY', '')
+YARNGPT_API_KEY = os.environ.get('AMEBOGPT_API_KEY', '') # Left as YARNGPT for backwards compat if needed, print changed
 TERMII_API_KEY  = os.environ.get('TERMII_API_KEY',  '')
 
-print("YARNGPT KEY LOADED:", bool(YARNGPT_API_KEY))
+print("AMEBOGPT KEY LOADED:", bool(YARNGPT_API_KEY))
